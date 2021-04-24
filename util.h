@@ -5,11 +5,9 @@
 #include <sys/time.h> 
 using namespace std;
 
-class Point{
-    public:
+typedef struct Point{
     double x, y;
-    double distance(Point p);
-};
+}Point;
 
 void read_file(char *filename, vector <Point> &points);
 
