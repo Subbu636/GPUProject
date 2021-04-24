@@ -3,9 +3,6 @@
 #include "util.h"
 using namespace std;
 
-double Point::distance(Point p){
-    return (p.x - x)*(p.x - x) + (p.y - y)*(p.y - y);
-}
 
 void read_file(char *filename, vector <Point> &points){
     FILE *file;
