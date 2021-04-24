@@ -33,7 +33,25 @@ __global__ void label_update(int* labels,double* dist,int k,int n)
         labels[id] = l;
     }
 }
-
+__global__ void center_update(Points* means,Points* points,int* labels,int n,int k)
+{
+    int id = threadIdx.x;
+    if(id<k){
+        means[id].x = 0;
+        means[id].y = 0;
+        double num_points = 0;
+        for(int i=0;i<n;i++){
+            if(labels[i]==id)
+            {
+                num_points+=1;
+                means[id].x += points[i].x;
+                means[id].y += points[i].y;
+            }
+        }
+        means[id].x /= num_points;
+        means[id].y /= num_points;
+    }
+}
 void kmeans_gpu(Points* points, Points* means,int* labels,double* dist, int iter, int n, int k){
     // distances size n*k 
     // write kmeans gpu  
