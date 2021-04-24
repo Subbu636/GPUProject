@@ -56,6 +56,6 @@ void kmeans_gpu(Points* points, Points* means,int* labels,double* dist, int iter
     // distances size n*k 
     // write kmeans gpu  
     distance_update<<<n,k>>>(dist,points,mean);
-    label_update<<<1,n>>>(labels,dist,k);
-    centers_update<<<1,k>>>(means,points,labels);
+    label_update<<<1,n>>>(labels,dist,k,n);
+    centers_update<<<1,k>>>(means,points,labels,n,k);
 } 
