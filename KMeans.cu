@@ -57,10 +57,10 @@ double kmeans_cpu(Point* points, Point* means,int* labels,double* dist, int iter
     // printf("hey\n");
         struct timeval t1, t2;
 
-    
+     gettimeofday(&t1, 0);
     dist_update(dist,points,means,n,k);
     // printf("dist is fine\n");
-     gettimeofday(&t1, 0);
+    
     label_update_cpu(labels,dist,k,n);
          gettimeofday(&t2, 0);
     // printf("labels is fine\n");
@@ -120,24 +120,32 @@ __global__ void centers_update(Point* means,Point* points,int* labels,int n,int 
         means[id].y /= num_points;
     }
 }
-double kmeans_gpu(Point* points, Point* means,int* labels,double* dist, int iter, int n, int k){
+double kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,double* dist,double* cpudist, int iter, int n, int k){
     // distances size n*k 
     // write kmeans gpu  
         struct timeval t1, t2;
 
-   
-    distance_update<<<1,k>>>(dist,points,means,n,k);
-    cudaDeviceSynchronize();
     
+     // cpu dist
+    Point cpumeans[k];
+    cudaMemcpy(cpumeans,means,k*sizeof(Point),cudaMemcpyDeviceToHost);
+
      gettimeofday(&t1, 0);
+    dist_update(cpudist,cpupoints,cpumeans,n,k);
+     gettimeofday(&t2, 0);
+
+    cudaMemcpy(dist,cpudist,n*k*sizeof(double),cudaMemcpyHostToDevice);
     double a = n/1024 + 1;
+    double ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
+
+     gettimeofday(&t1, 0);
     label_update<<<a,1024>>>(labels,dist,k,n);
     cudaDeviceSynchronize();
     gettimeofday(&t2, 0);
     centers_update<<<1,k>>>(means,points,labels,n,k);
     cudaDeviceSynchronize();
     // gettimeofday(&t2, 0);
-    double ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
+    ct += (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     return ct;
 } 
 void icd_update(Point* means, double* icd, int k)

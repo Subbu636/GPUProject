@@ -129,7 +129,7 @@ int main(int argc,char **argv){
     time = 0;
     while(i < iter){
             
-            double gt = kmeans_gpu(gpupoints,gpumeans,gpulabels,gpudist,iter,num_points,k);
+            double gt = kmeans_gpu(gpupoints,points,gpumeans,gpulabels,gpudist,dist,iter,num_points,k);
             time+=gt;
             i++;
     }
