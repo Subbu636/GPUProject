@@ -1,7 +1,7 @@
 #include "util.h"
 #include <sys/time.h> 
 
-void dist_update(double* dist, Point* points, Point* means, int n, int k)
+void dist_update(float* dist, Point* points, Point* means, int n, int k)
 {
     for(int i=0;i<n;i++)
     {
@@ -10,18 +10,18 @@ void dist_update(double* dist, Point* points, Point* means, int n, int k)
             // printf("%d %d\n",i,j);
             Point a = points[i];
             Point b = means[j];
-            double xdist = (a.x - b.x)*(a.x - b.x);
-            double ydist = (a.y - b.y)*(a.y - b.y);
+            float xdist = (a.x - b.x)*(a.x - b.x);
+            float ydist = (a.y - b.y)*(a.y - b.y);
             dist[i*k + j] = sqrt(xdist + ydist);
         }
     }
 }
-void label_update_cpu(int* labels, double* dist, int k,int n)
+void label_update_cpu(int* labels, float* dist, int k,int n)
 {
     for(int i=0;i<n;i++)
     {
         int l = 0;
-        double mindist = dist[i*k]; 
+        float mindist = dist[i*k]; 
         for(int j=1;j<k;j++)
         {
             if(mindist > dist[i*k + j]){
@@ -38,7 +38,7 @@ void centers_update_cpu(Point* means,Point* points,int* labels,int n,int k)
     {
         means[j].x = 0;
         means[j].y = 0;
-        double num_points = 0;
+        float num_points = 0;
         for(int i=0;i<n;i++){
             if(labels[i]==j)
             {
@@ -51,7 +51,7 @@ void centers_update_cpu(Point* means,Point* points,int* labels,int n,int k)
         means[j].y /= num_points;
     }
 }
-double kmeans_cpu(Point* points, Point* means,int* labels,double* dist, int iter, int n, int k){
+float kmeans_cpu(Point* points, Point* means,int* labels,float* dist, int iter, int n, int k){
     
     // write kmeans cpu 
     // printf("hey\n");
@@ -66,13 +66,13 @@ double kmeans_cpu(Point* points, Point* means,int* labels,double* dist, int iter
     // printf("labels is fine\n");
     centers_update_cpu(means,points,labels,n,k);
 
-     double ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
+     float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     // for(int i=0;i<100;i++){ printf("%d ",labels[i]);}
     // printf("\n");
     return ct;
 } 
 
-__global__ void distance_update(double* dist, Point* points, Point* means, int n, int k)
+__global__ void distance_update(float* dist, Point* points, Point* means, int n, int k)
 {
     // int id = (blockIdx.x*blockDim.x) + threadIdx.x;
     // int i = blockIdx.x;
@@ -80,17 +80,17 @@ __global__ void distance_update(double* dist, Point* points, Point* means, int n
         int j = threadIdx.x;
         Point a = points[i];
         Point b = means[j];
-        double xdist = (a.x - b.x)*(a.x - b.x);
-        double ydist = (a.y - b.y)*(a.y - b.y);
+        float xdist = (a.x - b.x)*(a.x - b.x);
+        float ydist = (a.y - b.y)*(a.y - b.y);
         dist[i*k + j] = sqrt(xdist + ydist);
     }
 }
-__global__ void label_update(int* labels,double* dist,int k,int n)
+__global__ void label_update(int* labels,float* dist,int k,int n)
 {
     int id = (blockIdx.x*blockDim.x) + threadIdx.x;
     if(id < n){
         int l = 0;
-        double mindist = dist[id*k]; 
+        float mindist = dist[id*k]; 
         for(int i=1;i<k;i++)
         {
             if(mindist > dist[id*k + i]){
@@ -107,7 +107,7 @@ __global__ void centers_update(Point* means,Point* points,int* labels,int n,int 
     if(id<k){
         means[id].x = 0;
         means[id].y = 0;
-        double num_points = 0;
+        float num_points = 0;
         for(int i=0;i<n;i++){
             if(labels[i]==id)
             {
@@ -120,7 +120,7 @@ __global__ void centers_update(Point* means,Point* points,int* labels,int n,int 
         means[id].y /= num_points;
     }
 }
-double kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,double* dist,double* cpudist, int iter, int n, int k){
+float kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,float* dist,float* cpudist, int iter, int n, int k){
     // distances size n*k 
     // write kmeans gpu  
         struct timeval t1, t2;
@@ -134,9 +134,9 @@ double kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,doub
     dist_update(cpudist,cpupoints,cpumeans,n,k);
      gettimeofday(&t2, 0);
 
-    cudaMemcpy(dist,cpudist,n*k*sizeof(double),cudaMemcpyHostToDevice);
-    double a = n/1024 + 1;
-    double ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
+    cudaMemcpy(dist,cpudist,n*k*sizeof(float),cudaMemcpyHostToDevice);
+    float a = n/1024 + 1;
+    float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
 
      gettimeofday(&t1, 0);
     label_update<<<a,1024>>>(labels,dist,k,n);
@@ -148,7 +148,7 @@ double kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,doub
     ct += (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     return ct;
 } 
-void icd_update(Point* means, double* icd, int k)
+void icd_update(Point* means, float* icd, int k)
 {
     for(int i=0;i<k;i++)
     {
@@ -160,10 +160,10 @@ void icd_update(Point* means, double* icd, int k)
         }
     }
 }
-void rid_update(double* icd,int* rid,int k){
+void rid_update(float* icd,int* rid,int k){
     for(int i=0;i<k;i++)
     {
-        vector< pair<double,int> > v;
+        vector< pair<float,int> > v;
         for(int j=0;j<k;j++)
         {
             v.push_back(make_pair(icd[i*k+j],j));
@@ -176,15 +176,15 @@ void rid_update(double* icd,int* rid,int k){
     }
 
 }
-void label_update_ineq(Point* points,int* labels,Point* means,double* icd, int* rid , int n, int k){
+void label_update_ineq(Point* points,int* labels,Point* means,float* icd, int* rid , int n, int k){
      for(int i=0; i<n ;i++)
      {
          int curr_cent = labels[i];
          Point p = points[i];
          Point c = means[curr_cent];
-         double d = (p.x-c.x)*(p.x - c.x) +  (p.y-c.y)*(p.y - c.y);
-         double new_d = d;
-         double new_cent = curr_cent;
+         float d = (p.x-c.x)*(p.x - c.x) +  (p.y-c.y)*(p.y - c.y);
+         float new_d = d;
+         float new_cent = curr_cent;
          for(int j=1;j<k;j++)
          {
             int cent = rid[curr_cent*k + j];
@@ -193,7 +193,7 @@ void label_update_ineq(Point* points,int* labels,Point* means,double* icd, int* 
                 break;
             }
             Point curr_c = means[cent];
-            double curr_d = (p.x-curr_c.x)*(p.x-curr_c.x) + (p.y-curr_c.y)*(p.y-curr_c.y);
+            float curr_d = (p.x-curr_c.x)*(p.x-curr_c.x) + (p.y-curr_c.y)*(p.y-curr_c.y);
             if(curr_d < new_d)
             {
                 new_d = curr_d;
@@ -203,7 +203,7 @@ void label_update_ineq(Point* points,int* labels,Point* means,double* icd, int* 
          labels[i] = new_cent;
      }
 }
-double kmeans_cpu_ineq(Point* points,Point* means, int* labels,double* icd,int* rid,int iter,int n,int k)
+float kmeans_cpu_ineq(Point* points,Point* means, int* labels,float* icd,int* rid,int iter,int n,int k)
 {
     struct timeval t1, t2;
 
@@ -213,10 +213,10 @@ double kmeans_cpu_ineq(Point* points,Point* means, int* labels,double* icd,int* 
     label_update_ineq(points,labels,means,icd,rid,n,k);
     gettimeofday(&t2, 0);
     centers_update_cpu(means,points,labels,n,k);
-    double ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
+    float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     return ct;
 }
-__global__ void label_update_ineq_gpu(Point* points,int* labels,Point* means,double* icd, int* rid,int n,int k)
+__global__ void label_update_ineq_gpu(Point* points,int* labels,Point* means,float* icd, int* rid,int n,int k)
 {
      int t =  ceil( (float)n/ (gridDim.x * blockDim.x) );
      int s =  blockIdx.x * (n/gridDim.x) + threadIdx.x * t;
@@ -227,9 +227,9 @@ __global__ void label_update_ineq_gpu(Point* points,int* labels,Point* means,dou
             int curr_cent = labels[i];
             Point p = points[i];
             Point c = means[curr_cent];
-            double d = (p.x-c.x)*(p.x - c.x) +  (p.y-c.y)*(p.y - c.y);
-            double new_d = d;
-            double new_cent = curr_cent;
+            float d = (p.x-c.x)*(p.x - c.x) +  (p.y-c.y)*(p.y - c.y);
+            float new_d = d;
+            float new_cent = curr_cent;
             for(int j=1;j<k;j++)
             {
                 int cent = rid[curr_cent*k + j];
@@ -238,7 +238,7 @@ __global__ void label_update_ineq_gpu(Point* points,int* labels,Point* means,dou
                     break;
                 }
                 Point curr_c = means[cent];
-                double curr_d = (p.x-curr_c.x)*(p.x-curr_c.x) + (p.y-curr_c.y)*(p.y-curr_c.y);
+                float curr_d = (p.x-curr_c.x)*(p.x-curr_c.x) + (p.y-curr_c.y)*(p.y-curr_c.y);
                 if(curr_d < new_d)
                 {
                     new_d = curr_d;
@@ -249,7 +249,7 @@ __global__ void label_update_ineq_gpu(Point* points,int* labels,Point* means,dou
          }
      }
 }
-double kmeans_gpu_ineq(Point* points, Point* means, int* labels, double* icd, int* rid, int iter, int n, int k){
+float kmeans_gpu_ineq(Point* points, Point* means, int* labels, float* icd, int* rid, int iter, int n, int k){
     // means , rid, icd CPU
     int minGridSize, gridSize, blockSize;
     //  cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,label_update_ineq, 0, 1024); 
@@ -258,10 +258,10 @@ double kmeans_gpu_ineq(Point* points, Point* means, int* labels, double* icd, in
     gridSize = (n + blockSize - 1) / blockSize; 
 
     struct timeval t1, t2;
-    double* gpuicd;
+    float* gpuicd;
     int* gpurid;
     Point* gpumeans;
-    cudaMalloc(&gpuicd,k*k*sizeof(double));
+    cudaMalloc(&gpuicd,k*k*sizeof(float));
     cudaMalloc(&gpurid,k*k*sizeof(int));
     cudaMalloc(&gpumeans,k*sizeof(Point));
 
@@ -269,10 +269,10 @@ double kmeans_gpu_ineq(Point* points, Point* means, int* labels, double* icd, in
     icd_update(means,icd,k);
     rid_update(icd,rid,k);
         gettimeofday(&t2, 0);
-double ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
+float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
 
     cudaMemcpy(gpumeans,means,k*sizeof(Point),cudaMemcpyHostToDevice);
-    cudaMemcpy(gpuicd,icd,k*k*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpuicd,icd,k*k*sizeof(float),cudaMemcpyHostToDevice);
     cudaMemcpy(gpurid,rid,k*k*sizeof(int),cudaMemcpyHostToDevice);
     gettimeofday(&t1, 0);
     label_update_ineq_gpu<<<gridSize,blockSize>>>(points,labels,gpumeans,gpuicd, gpurid,n,k);

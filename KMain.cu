@@ -13,9 +13,9 @@ Point* read(char *filename, int* num){
         return NULL;
     }
     vector<Point> points;
-    double x,y;
+    float x,y;
     int n = 0;
-    while(fscanf(file,"%lf %lf",&x,&y) != EOF){
+    while(fscanf(file,"%f %f",&x,&y) != EOF){
         Point p;
         p.x = x;
         p.y = y;
@@ -50,15 +50,18 @@ int main(int argc,char **argv){
     // }
     // printf("%d\n", sizeof(points));
     int num_points = p[0];
+    printf("Points Allocated\n");
     // return 0;
     Point* gpupoints;
     cudaMalloc(&gpupoints, num_points*sizeof(Point));
+    printf("GPU Points Allocated\n");
     // Point* cpoints;
     // cpoints = (Point*) malloc(n*sizeof(Point));
     cudaMemcpy(gpupoints,points,num_points*sizeof(Point),cudaMemcpyHostToDevice); 
-
+    printf("GPU Points Copied\n");
     Point* means = (Point*) malloc(k*sizeof(Point));
     int* labels = (int*) malloc(num_points*sizeof(int));
+    printf("Means and Labels Allocated\n");
     int num[k];
     for(int i=0;i<k;i++) { num[i] = 0;}
     
@@ -79,49 +82,53 @@ int main(int argc,char **argv){
     // printf("\n");
     for(int i=0;i<k;i++)
     {
-        means[i].x /= (double) num[i];
-         means[i].y /= (double) num[i];
+        means[i].x /= (float) num[i];
+         means[i].y /= (float) num[i];
     }
 
     Point* imeans = (Point*) malloc(k*sizeof(Point));
     int* ilabels = (int*) malloc(num_points*sizeof(int));
     for(int i=0;i<num_points;i++) ilabels[i] = labels[i];
     for(int i=0;i<k;i++) { imeans[i].x = means[i].x; imeans[i].y = means[i].y;} 
-
+    printf("imeans and ilabels Allocated\n");
     Point* gpumeans;
     cudaMalloc(&gpumeans, k*sizeof(Point));
     cudaMemcpy(gpumeans,means,k*sizeof(Point),cudaMemcpyHostToDevice); 
-
+    printf("GPU means Allocated\n");
     // for(int i=0;i<k;i++){ printf("%d ",num[i]);}
     // printf("\n");
     int* gpulabels;
     cudaMalloc(&gpulabels, num_points*sizeof(int));
     cudaMemcpy(gpulabels,labels,num_points*sizeof(int),cudaMemcpyHostToDevice); 
+    printf("GPU labels Allocated\n");
     int* gpuilabels;
     cudaMalloc(&gpuilabels, num_points*sizeof(int));
     cudaMemcpy(gpuilabels,ilabels,num_points*sizeof(int),cudaMemcpyHostToDevice); 
+    printf("GPU ilabels Allocated\n");
     // for(int i=0;i<k;i++){ printf("%d ",num[i]);}
     // printf("\n");
     //Updating above variables
     int iter = 1000;
     // cpu
-    double dist[num_points*k];
-    double* gpudist;
-    cudaMalloc(&gpudist, num_points*k*sizeof(double));
+    float dist[num_points*k];
+    printf("Dist Allocated\n");
+    float* gpudist;
+    cudaMalloc(&gpudist, num_points*k*sizeof(float));
+    printf("GPU Dist Allocated\n");
     // for(int i=0;i<k;i++){ printf("%d ",num[i]);}
     // printf("\n");
     int i = 0;
-    double time = 0;
+    float time = 0;
     while(i < iter){
        
         // printf("%d \n",i);
-        double ct = kmeans_cpu( points,means,labels,dist,iter,num_points,k);
+        float ct = kmeans_cpu( points,means,labels,dist,iter,num_points,k);
         
         time+=ct;
         i+=1;
     }
 
-    printf("CPU Time taken: %.6f ms\n", time/(double)iter);
+    printf("CPU Time taken: %.6f ms\n", time/(float)iter);
     for(int i=0;i<num_points;i++){ printf("%d ",labels[i]);}
     printf("\n");
     // gpu
@@ -129,7 +136,7 @@ int main(int argc,char **argv){
     time = 0;
     while(i < iter){
             
-            double gt = kmeans_gpu(gpupoints,points,gpumeans,gpulabels,gpudist,dist,iter,num_points,k);
+            float gt = kmeans_gpu(gpupoints,points,gpumeans,gpulabels,gpudist,dist,iter,num_points,k);
             time+=gt;
             i++;
     }
@@ -140,11 +147,11 @@ int main(int argc,char **argv){
    
      i = 0;
     time = 0;
-    double* icd = (double*) malloc(k*k*sizeof(double));
+    float* icd = (float*) malloc(k*k*sizeof(float));
     int* rid = (int*) malloc(k*k*sizeof(int));
     while(i < iter){
         // printf("%d \n",i);
-        double ct = kmeans_cpu_ineq( points,imeans,ilabels,icd,rid,iter,num_points,k);
+        float ct = kmeans_cpu_ineq( points,imeans,ilabels,icd,rid,iter,num_points,k);
         time+=ct;
         i+=1;
     }
@@ -157,7 +164,7 @@ int main(int argc,char **argv){
     time = 0;
     
     while(i<iter){
-        double gt = kmeans_gpu_ineq( gpupoints, imeans, gpuilabels, icd, rid, iter, num_points, k);
+        float gt = kmeans_gpu_ineq( gpupoints, imeans, gpuilabels, icd, rid, iter, num_points, k);
         time+=gt;
         i++;
     }
