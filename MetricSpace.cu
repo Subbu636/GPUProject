@@ -11,7 +11,7 @@ void read_file(char *filename, vector <Point> &points){
         printf("#cannot open input file");
         return;
     }
-    double x,y;
+    float x,y;
     while(fscanf(file,"%lf %lf",&x,&y) != EOF){
         Point p;
         p.x = x;

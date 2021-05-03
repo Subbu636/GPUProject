@@ -6,13 +6,16 @@
 #include "cublas_v2.h"
 using namespace std;
 
-struct Point{
-    double x, y;
-};
+typedef struct Point{
+    float x, y;
+}Point;
 
 void read_file(char *filename, vector <Point> &points);
 
-vector <Point> kmeans_cpu(vector <Point> points, int iter);
+float kmeans_cpu(Point* points, Point* means,int* labels,float* dist, int iter, int n, int k);
+float kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,float* dist,float* cpudist, int iter, int n, int k);
+float kmeans_cpu_ineq(Point* points,Point* means, int* labels,float* icd,int* rid,int iter,int n,int k);
+float kmeans_gpu_ineq(Point* points, Point* means, int* labels, float* icd, int* rid, int iter, int n, int k);
 
 vector <Point> kmeans_gpu(vector <Point> points, int iter);
 
