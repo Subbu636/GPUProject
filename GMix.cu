@@ -296,6 +296,7 @@ void cublas_atb(double *res, const double *a, const double *b, const int m, cons
     const double *beta = &bet;
     cublasStatus_t stat;
     stat = cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, n, m, k, alpha, b, lda, a, ldb, beta, res, ldc);
+    printf ("%d\n",stat);
     if (stat != CUBLAS_STATUS_SUCCESS) {
         printf ("#cublas multiply error\n");
         exit(1);
