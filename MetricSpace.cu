@@ -53,6 +53,7 @@ double *read_file_array(char *fname, int d,int *l){
 }
 
 double *init_prob(int l, int k){
+    srand(time(0));
     double *prob = create(l,k);
     for(int i = 0;i < l;++i){
         double s = 0.0;
@@ -60,10 +61,8 @@ double *init_prob(int l, int k){
             prob[i*k+j] = (double) ((rand()%10)+1.0);
             s += prob[i*k+j];
         }
-        // cout<<s<<endl;
         for(int j = 0;j < k;++j){
             prob[i*k+j] = prob[i*k+j]/s;
-            // cout<<i<<":"<<j<<":"<<prob[i*k+j]<<endl;
         }
     }
     return prob;
