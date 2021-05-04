@@ -98,7 +98,7 @@ __host__ __device__ double matdet(double *a, int n)
         res += (s*a[i]*matdet(cofactor(temp,a,0,i,n),n-1));
         s = -1.0*s;
     }
-    // free(temp);
+    free(temp);
     return res;
 }
 
@@ -215,6 +215,7 @@ void gmix_cpu(double *p,double *r, int k, int iter, int l, int d, double *ctime)
         // cout<<"sigma--------------------------------"<<endl;
         gettimeofday(&t2, 0);
         ctime[t*2] = ((double)(1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0);
+        cout<<"CPU:"<<t<<endl;
         gettimeofday(&t1, 0);
         // E-step
         for(int i = 0;i < l; ++i){
@@ -271,17 +272,27 @@ __global__ void compute_v(double *v, double *p, double *mu, double *r, int l, in
     free(temp); free(var); free(trans);
 }
 
-__global__ void compute_r(double *r, double *pi, double *p, double *mu, double *sigma, int l, int k, int d){
-    int i = (blockIdx.x*blockDim.x)+threadIdx.x;
-    if(i >= l) return;
+__host__ __device__ void helper_r(double *r, double *pi, double *p, double *mu, double *sigma, int l, int k, int d, int i){
     double s = 0.0;
+    // for(int j = 0;j < k; ++j){
+    //     if(i == 0 && j < 10) printf("%lf ",r[i*k+j]);
+    // }
+    // if(i == 0) printf("\n");
     for(int j = 0;j < k; ++j){
         r[i*k+j] = pi[j]*norm(&p[i*d],&mu[j*d],&sigma[j*d*d],d);
         s+=r[i*k+j];
     }
     for(int j = 0;j < k;++j){
         r[i*k+j] = r[i*k+j]/s;
+        // if(i == 0 && j < 10) printf("%lf ",r[i*k+j]);
     }
+    // if(i == 0) printf("\n");
+}
+
+__global__ void compute_r(double *r, double *pi, double *p, double *mu, double *sigma, int l, int k, int d){
+    int i = (blockIdx.x*blockDim.x)+threadIdx.x;
+    if(i >= l) return;
+    helper_r(r,pi,p,mu,sigma,l,k,d,i);
 }
 
 __global__ void gmatprint(double *a, int m, int n){
@@ -296,6 +307,7 @@ void cublas_atb(double *res, const double *a, const double *b, const int m, cons
     const double *beta = &bet;
     cublasStatus_t stat;
     stat = cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, n, m, k, alpha, b, lda, a, ldb, beta, res, ldc);
+    printf ("%d\n",stat);
     if (stat != CUBLAS_STATUS_SUCCESS) {
         printf ("#cublas multiply error\n");
         exit(1);
@@ -313,6 +325,25 @@ void cublas_ab(double *res, const double *a, const double *b, const int m, const
     if (stat != CUBLAS_STATUS_SUCCESS) {
         printf ("#cublas multiply error\n");
         exit(1);
+    }
+}
+
+__global__ void gmatmul_ab(double *res, double *a, double *b, int m, int k, int n){
+    int id = (blockIdx.x*blockDim.x)+threadIdx.x;
+    if(id >= m*n) return;
+    int i = id/n, j = id%n;
+    res[i*n+j] = 0.0;
+    for(int l = 0;l < k;++l){
+        res[i*n+j] += (a[i*k+l]*b[l*n+j]);
+    }
+}
+__global__ void gmatmul_atb(double *res, double *a, double *b, int m, int k, int n){
+    int id = (blockIdx.x*blockDim.x)+threadIdx.x;
+    if(id >= m*n) return;
+    int i = id/n, j = id%n;
+    res[i*n+j] = 0.0;
+    for(int l = 0;l < k;++l){
+        res[i*n+j] += (a[l*m+i]*b[l*n+j]);
     }
 }
  
@@ -363,7 +394,9 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
     for(int t = 0; t < iter;++t){
         gettimeofday(&t1, 0);
         // M-step
-        cublas_atb(n,r,lones,k,l,1,handle);
+        // cublas_atb(n,r,lones,k,l,1,handle);
+        gmatmul_atb<<<k,1>>>(n,r,lones,k,l,1);
+        cudaDeviceSynchronize();
         // gmatprint<<<1,1>>>(n, 1, k);
         // cudaDeviceSynchronize();
         // cout<<"n-----------------------------"<<endl;
@@ -372,7 +405,9 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
         // gmatprint<<<1,1>>>(pi, 1, k);
         // cudaDeviceSynchronize();
         // cout<<"pi-----------------------------"<<endl;
-        cublas_atb(mu, r, p, k, l, d,handle);
+        // cublas_atb(mu, r, p, k, l, d,handle);
+        gmatmul_atb<<<k*d,1>>>(mu,r,p,k,l,d);
+        cudaDeviceSynchronize();
         // gmatprint<<<1,1>>>(mu, 1, k*d);
         // cudaDeviceSynchronize();
         // cout<<"mu-----------------------------"<<endl;
@@ -383,7 +418,9 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
         // cout<<"mu-----------------------------"<<endl;
         compute_v<<<l*k,1>>>(v,p,mu,r,l,k,d);
         cudaDeviceSynchronize();
-        cublas_ab(sigma, v, lones, d*d*k,l,1,handle);
+        // cublas_ab(sigma, v, lones, d*d*k,l,1,handle);
+        gmatmul_ab<<<k*d*d,1>>>(sigma,v,lones,d*d*k,l,1);
+        cudaDeviceSynchronize();
         // gmatprint<<<1,1>>>(sigma, k, d*d);
         // cudaDeviceSynchronize();
         // cout<<"sigma-----------------------------"<<endl;
@@ -394,22 +431,29 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
         // cout<<"sigma-----------------------------"<<endl;
         gettimeofday(&t2, 0);
         gtime[t*2] = ((double)(1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0);
+        cout<<"GPU:"<<t<<endl;
         gettimeofday(&t1, 0);
         // E-step
-        compute_r<<<l,1>>>(r, pi, p, mu, sigma, l, k, d);
         // gmatprint<<<1,1>>>(r, 1, k);
         // cudaDeviceSynchronize();
-        // cout<<"r0-----------------------------"<<endl;
+        // cout<<"r-----------------------------"<<endl;
+        compute_r<<<l,1>>>(r, pi, p, mu, sigma, l, k, d);
+        cudaDeviceSynchronize();
+        // gmatprint<<<1,1>>>(r, 1, k);
+        // cudaDeviceSynchronize();
+        // cout<<"r-----------------------------"<<endl;
         gettimeofday(&t2, 0);
         gtime[t*2+1] = ((double)(1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0);
 
     }
+    // matprint(cr,1,10);
     stat = cublasDestroy(handle);
     if (stat != CUBLAS_STATUS_SUCCESS) {
         printf ("#handle destroy error\n");
         exit(1);
     }
     cudaMemcpy(cr,r,l*k*sizeof(double),cudaMemcpyDeviceToHost);
+    // matprint(cr,1,10);
     return;
 }
 
