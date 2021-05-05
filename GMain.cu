@@ -4,7 +4,7 @@ int main(int argc,char **argv){
     char *fname = argv[1];
     int *len = (int*)malloc(sizeof(int)), d = 2;
     double *points = read_file_array(fname, d,len);
-    int iter = 100,k = 20, l = len[0];
+    int iter = atoi(argv[3]),k = atoi(argv[2]), l = len[0];
     double *cprob = init_prob(l,k);
     double *gprob = (double*)malloc(sizeof(double)*l*k);
     copy(cprob,cprob + l*k, gprob);
