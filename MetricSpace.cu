@@ -11,8 +11,8 @@ void read_file(char *filename, vector <Point> &points){
         printf("#cannot open input file");
         return;
     }
-    float x,y;
-    while(fscanf(file,"%f %f",&x,&y) != EOF){
+    double x,y;
+    while(fscanf(file,"%lf %lf",&x,&y) != EOF){
         Point p;
         p.x = x;
         p.y = y;
@@ -58,7 +58,7 @@ double *init_prob(int l, int k){
     for(int i = 0;i < l;++i){
         double s = 0.0;
         for(int j = 0;j < k;++j){
-            prob[i*k+j] = (double) ((rand()%10)+1.0);
+            prob[i*k+j] = (double) ((rand()%100)+1.0);
             s += prob[i*k+j];
         }
         for(int j = 0;j < k;++j){

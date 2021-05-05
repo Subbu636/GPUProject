@@ -7,7 +7,7 @@
 using namespace std;
 
 typedef struct Point{
-    float x, y;
+    double x, y;
 }Point;
 
 void read_file(char *filename, vector <Point> &points);
