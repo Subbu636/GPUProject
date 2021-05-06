@@ -12,10 +12,12 @@ typedef struct Point{
 
 void read_file(char *filename, vector <Point> &points);
 
-double kmeans_cpu(Point* points, Point* means,int* labels,double* dist, int iter, int n, int k);
-double kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,double* dist,double* cpudist, int iter, int n, int k);
-double kmeans_cpu_ineq(Point* points,Point* means, int* labels,double* icd,int* rid,int iter,int n,int k);
-double kmeans_gpu_ineq(Point* points, Point* means, int* labels, double* icd, int* rid, int iter, int n, int k);
+float kmeans_cpu(Point* points, Point* means,int* labels,float* dist, int iter, int n, int k, float* out);
+float kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,float* dist,float* cpudist, int iter, int n, int k, float* out);
+float kmeans_cpu_ineq(Point* points,Point* means, int* labels,float* icd,int* rid,int iter,int n,int k, float* out);
+float kmeans_gpu_ineq(Point* points, Point* means, int* labels, float* icd, int* rid, int iter, int n, int k, float* out,int* m);
+float kmeans_gpu_ineq_eff(Point* points,int* inds, Point* means, int* labels, float* icd, int* rid, int iter, int n, int k, float* out);
+vector <vector <float>> gmix_gpu(vector <Point> points, int iter);
 
 vector <Point> kmeans_gpu(vector <Point> points, int iter);
 
