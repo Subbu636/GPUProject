@@ -78,17 +78,12 @@ __host__ __device__ double *matsmul(double *res, double *v, double val, int m, i
 }
 
 __host__ __device__ double norm(double *x, double *mu, double *sigma, int d){
-    double sig = 1.0;
+    double deno = sqrt((double)(2.0*3.14159));
+    double expo = 1.0;
     for(int i = 0;i < d;++i){
-        sig = sig * sqrt(sigma[i*d+i]);
+        expo *= (exp(-0.5*(x[i]-mu[i])*(x[i]-mu[i])/sigma[i*d+i])/(deno*sqrt(sigma[i*d+i])));
     }
-    double deno = sqrt(pow((double)(2.0*3.14159),(double)d))*sig;
-    double expo = 0.0;
-    for(int i = 0;i < d;++i){
-        expo += ((x[i]-mu[i])*(x[i]-mu[i])/sigma[i*d+i]);
-    }
-    // printf("%lf %lf %lf\n",exp(-0.5*expo),deno, expo);
-    return exp(-0.5*expo)/deno;
+    return expo;
 }
 
 __host__ __device__ void matprint(double *a, int m, int n){
@@ -207,15 +202,15 @@ __global__ void compute_div(double *m, double *n, int k, int d){
 
 __global__ void compute_v(double *v, double *p, double *mu, double *r, int l, int k, int d){
     int id = (blockIdx.x*blockDim.x)+threadIdx.x;
-    if(id >= k*l) return;
-    int i = id/k, j = id%k;
-    double *temp = create(d,1), *var = create(d,d), *trans = create(d,1);
-    matsub(temp,&p[i*d],&mu[j*d],d,1);
-    matmul(var,temp,transpose(trans,temp,d,1),d,1,d);
-    for(int s = 0;s < d*d;++s){
-        v[l*(j*d*d + s) + i] = var[s]*r[i*k+j];
-    }
-    free(temp); free(var); free(trans);
+    if(id >= k*l*d*d) return;
+    int y = id%d, x = (id/d)%d, j = (id/(d*d))%k, i = (id/(d*d*k))%l;
+    // for (int x = 0; x < d; x++) {
+    //     for (int y = 0; y < d; y++) {
+    //         int s = x*d+y;
+    //         v[l*(j*d*d + s) + i] = (p[i*d+x]-mu[j*d+x])*(p[i*d+y]-mu[j*d+y])*r[i*k+j];
+    //     }
+    // }
+    v[l*(j*d*d + x*d + y) + i] = (p[i*d+x]-mu[j*d+x])*(p[i*d+y]-mu[j*d+y])*r[i*k+j];
 }
 
 __global__ void compute_r(double *r, double *pi, double *p, double *mu, double *sigma, int l, int k, int d){
@@ -359,6 +354,7 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
         compute_n_pi<<<(k),1>>>(pi, n, r, l, k);
         // gmatmul_atb<<<(k/blockSize)+1,blockSize>>>(n,r,lones,k,l,1);
         cudaDeviceSynchronize();
+        // gpuErrchk(cudaPeekAtLastError());
         // gmatprint<<<1,1>>>(n, 1, k);
         // cudaDeviceSynchronize();
         // cout<<"n-----------------------------"<<endl;
@@ -371,6 +367,7 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
         gmatmul_atb_mu<<<(k*d),1>>>(mu,r,p,n,k,l,d);
         // gmatmul_atb<<<(k*d/blockSize)+1,blockSize>>>(mu,r,p,k,l,d);
         cudaDeviceSynchronize();
+        // gpuErrchk(cudaPeekAtLastError());
         // gmatprint<<<1,1>>>(mu, 1, k*d);
         // cudaDeviceSynchronize();
         // cout<<"mu-----------------------------"<<endl;
@@ -379,7 +376,7 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
         // gmatprint<<<1,1>>>(mu, 1, k*d);
         // cudaDeviceSynchronize();
         // cout<<"mu-----------------------------"<<endl;
-        compute_v<<<(k*l/blockSize)+1,blockSize>>>(v,p,mu,r,l,k,d);
+        compute_v<<<(k*l*d*d/blockSize)+1,blockSize>>>(v,p,mu,r,l,k,d);
         cudaDeviceSynchronize();
         // gpuErrchk(cudaPeekAtLastError());
         // gmatprint<<<1,1>>>(v, 1, k);
@@ -410,6 +407,7 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
         // cout<<"r-----------------------------"<<endl;
         compute_r<<<(l/blockSize)+1,blockSize>>>(r, pi, p, mu, sigma, l, k, d);
         cudaDeviceSynchronize();
+        // gpuErrchk(cudaPeekAtLastError());
         // gmatprint<<<1,1>>>(r, 1, 10);
         // cudaDeviceSynchronize();
         // cout<<"r-----------------------------"<<endl;

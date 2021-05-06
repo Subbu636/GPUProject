@@ -1,5 +1,21 @@
 #include "util.h"
 
+const char* cublasGetErrorString(cublasStatus_t status)
+{
+    switch(status)
+    {
+        case CUBLAS_STATUS_SUCCESS: return "CUBLAS_STATUS_SUCCESS";
+        case CUBLAS_STATUS_NOT_INITIALIZED: return "CUBLAS_STATUS_NOT_INITIALIZED";
+        case CUBLAS_STATUS_ALLOC_FAILED: return "CUBLAS_STATUS_ALLOC_FAILED";
+        case CUBLAS_STATUS_INVALID_VALUE: return "CUBLAS_STATUS_INVALID_VALUE"; 
+        case CUBLAS_STATUS_ARCH_MISMATCH: return "CUBLAS_STATUS_ARCH_MISMATCH"; 
+        case CUBLAS_STATUS_MAPPING_ERROR: return "CUBLAS_STATUS_MAPPING_ERROR";
+        case CUBLAS_STATUS_EXECUTION_FAILED: return "CUBLAS_STATUS_EXECUTION_FAILED"; 
+        case CUBLAS_STATUS_INTERNAL_ERROR: return "CUBLAS_STATUS_INTERNAL_ERROR"; 
+    }
+    return "unknown error";
+}
+
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -78,17 +94,12 @@ __host__ __device__ double *matsmul(double *res, double *v, double val, int m, i
 }
 
 __host__ __device__ double norm(double *x, double *mu, double *sigma, int d){
-    double sig = 1.0;
+    double deno = sqrt((double)(2.0*3.14159));
+    double expo = 1.0;
     for(int i = 0;i < d;++i){
-        sig = sig * sqrt(sigma[i*d+i]);
+        expo *= (exp(-0.5*(x[i]-mu[i])*(x[i]-mu[i])/sigma[i*d+i])/(deno*sqrt(sigma[i*d+i])));
     }
-    double deno = sqrt(pow((double)(2.0*3.14159),(double)d))*sig;
-    double expo = 0.0;
-    for(int i = 0;i < d;++i){
-        expo += ((x[i]-mu[i])*(x[i]-mu[i])/sigma[i*d+i]);
-    }
-    // printf("%lf %lf %lf\n",exp(-0.5*expo),deno, expo);
-    return exp(-0.5*expo)/deno;
+    return expo;
 }
 
 __host__ __device__ void matprint(double *a, int m, int n){
@@ -106,13 +117,13 @@ void gmix_cpu(double *p,double *r, int k, int iter, int l, int d, double *ctime)
     // double arr[4] = {2.0,1.0,1.0,2.0};
     // double mu[2] = {1.0, 1.0}, x[2] = {1.0, 0.0};
     // cout<<norm(x,mu,arr,2)<<endl;
-
-    double n[k],pi[k],mu[k*d],sigma[k*d*d];
+    double n[k],pi[k],mu[k*d],*sigma = (double*)malloc(k*d*d*sizeof(double));
     double temp[d], var[d*d],trans[d];
     struct timeval t1, t2;
-
     // matprint(r,2,k);
     // cout<<"r----------------------------"<<endl;
+    // cout<<d<<endl;
+    // cout<<l<<endl;
 
     for(int t = 0;t < iter;++t){
         gettimeofday(&t1, 0);
@@ -139,7 +150,7 @@ void gmix_cpu(double *p,double *r, int k, int iter, int l, int d, double *ctime)
         for(int i = 0;i < k;++i){
             matsmul(&mu[i*d],&mu[i*d],1/n[i],d,1);
         }
-        // matprint(mu,1,k*d);
+        // matprint(mu,1,d);
         // cout<<"mu--------------------------------"<<endl;
         init(sigma,k,d*d,0.0);
         for(int i = 0;i < k;++i){
@@ -153,10 +164,10 @@ void gmix_cpu(double *p,double *r, int k, int iter, int l, int d, double *ctime)
         for(int i = 0;i < k;++i){
             matsmul(&sigma[i*d*d],&sigma[i*d*d],1/n[i],d,d);
         }
-        // matprint(sigma,1,k*d*d);
+        // matprint(sigma,1,d);
         // cout<<"sigma--------------------------------"<<endl;
         gettimeofday(&t2, 0);
-        ctime[t*2] = ((double)(1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0);
+        ctime[t*2] = ((1000000.0*(double)(t2.tv_sec-t1.tv_sec) + (double)(t2.tv_usec-t1.tv_usec))/1000.0);
         cout<<"CPU:"<<t<<endl;
         gettimeofday(&t1, 0);
         // E-step
@@ -176,6 +187,7 @@ void gmix_cpu(double *p,double *r, int k, int iter, int l, int d, double *ctime)
         gettimeofday(&t2, 0);
         ctime[t*2+1] = ((double)(1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0);
     }
+    free(sigma);
     return;  
 } 
 
@@ -207,15 +219,15 @@ __global__ void compute_div(double *m, double *n, int k, int d){
 
 __global__ void compute_v(double *v, double *p, double *mu, double *r, int l, int k, int d){
     int id = (blockIdx.x*blockDim.x)+threadIdx.x;
-    if(id >= k*l) return;
-    int i = id/k, j = id%k;
-    double *temp = create(d,1), *var = create(d,d), *trans = create(d,1);
-    matsub(temp,&p[i*d],&mu[j*d],d,1);
-    matmul(var,temp,transpose(trans,temp,d,1),d,1,d);
-    for(int s = 0;s < d*d;++s){
-        v[l*(j*d*d + s) + i] = var[s]*r[i*k+j];
-    }
-    free(temp); free(var); free(trans);
+    if(id >= k*l*d*d) return;
+    int y = id%d, x = (id/d)%d, j = (id/(d*d))%k, i = (id/(d*d*k))%l;
+    // for (int x = 0; x < d; x++) {
+    //     for (int y = 0; y < d; y++) {
+    //         int s = x*d+y;
+    //         v[l*(j*d*d + s) + i] = (p[i*d+x]-mu[j*d+x])*(p[i*d+y]-mu[j*d+y])*r[i*k+j];
+    //     }
+    // }
+    v[l*(j*d*d + x*d + y) + i] = (p[i*d+x]-mu[j*d+x])*(p[i*d+y]-mu[j*d+y])*r[i*k+j];
 }
 
 __global__ void compute_r(double *r, double *pi, double *p, double *mu, double *sigma, int l, int k, int d){
@@ -246,6 +258,7 @@ void cublas_atb(double *res, const double *a, const double *b, const int m, cons
     // printf ("%d\n",stat); 
     if (stat != CUBLAS_STATUS_SUCCESS) {
         printf ("#cublas multiply error\n");
+        printf ("%s\n",cublasGetErrorString(stat));
         exit(1);
     }
 }
@@ -260,6 +273,7 @@ void cublas_ab(double *res, const double *a, const double *b, const int m, const
     stat = cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, alpha, b, lda, a, ldb, beta, res, ldc);
     if (stat != CUBLAS_STATUS_SUCCESS) {
         printf ("#cublas multiply error\n");
+        printf ("%s\n",cublasGetErrorString(stat));
         exit(1);
     }
 }
@@ -379,7 +393,7 @@ void gmix_gpu(double *cp,double *cr, int k, int iter, int l, int d, double *gtim
         // gmatprint<<<1,1>>>(mu, 1, k*d);
         // cudaDeviceSynchronize();
         // cout<<"mu-----------------------------"<<endl;
-        compute_v<<<(k*l/blockSize)+1,blockSize>>>(v,p,mu,r,l,k,d);
+        compute_v<<<(k*l*d*d/blockSize)+1,blockSize>>>(v,p,mu,r,l,k,d);
         cudaDeviceSynchronize();
         // gpuErrchk(cudaPeekAtLastError());
         // gmatprint<<<1,1>>>(v, 1, k);
