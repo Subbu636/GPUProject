@@ -30,22 +30,26 @@ Point* read(char *filename, int* num){
      num[0] = n;
      return ps;
 }
+
 int main(int argc,char **argv){
     int seed = 1234;
     srand(1234);
     struct timeval t1, t2;
     char *fname = argv[1];
+
     if(fname == NULL)
     {
-        printf("give the input\n");
+        printf("give the input file\n");
         return 0;
     }
     char *oname = argv[2];
+    
     if (oname == NULL)
     {
         printf("give the output file\n");
         return 0;
     }
+    
     FILE *outfile;
     outfile = fopen(oname, "w");
     char* kchar = argv[3];
@@ -71,8 +75,7 @@ int main(int argc,char **argv){
 
     vector<int> ind;
     for(int i=0;i<k;i++) ind.push_back(i*(num_points/k));
-    // for(int i=0;i<num_points;i++) random_shuffle(0, n);
-    // random shuffle taking a lot time for 10^5 so used above method 
+    // for(int i=0;i<num_points;i++) random_shuffle(0, n);   random shuffle taking a lot time for 10^5 so used above method 
     Point* gpupoints;
     cudaMalloc(&gpupoints, num_points*sizeof(Point));
     printf("GPU Points Allocated\n");
@@ -126,6 +129,7 @@ int main(int argc,char **argv){
     float* gpudist;
     cudaMalloc(&gpudist, num_points*k*sizeof(float));
     printf("GPU Dist Allocated\n");
+
     ///////////////////////// *************** STANDARD CPU ALGORITHM *************:228******* 
     int it = 0;
     float time = 0;
@@ -147,6 +151,7 @@ int main(int argc,char **argv){
     printf("CPU Time taken: %.6f ms\n", time/(float)it);
 
     for(int j=0;j<3;j++) avgout[j]/=it;
+    //// Writing to file ////
     fprintf(outfile,"%f %f %f\n",avgout[0],avgout[1],avgout[2]);
     for(int i=0;i<k;i++)
     {
@@ -180,6 +185,7 @@ int main(int argc,char **argv){
     cudaMemcpy(means,gpumeans,k*sizeof(Point),cudaMemcpyDeviceToHost);
 
     for(int j=0;j<3;j++) avgout[j]/=it;
+     //// Writing to file ////
     for(int i=0;i<num_points;i++){ printf("%d ",labels[i]);}
     printf("\n");
     fprintf(outfile,"%f %f %f\n",avgout[0],avgout[1],avgout[2]);
@@ -213,8 +219,8 @@ int main(int argc,char **argv){
     for(int i=0;i<num_points;i++){ printf("%d ",ilabels[i]);}
     printf("\n");
 
-     for(int j=0;j<3;j++) avgout[j]/=it;
-
+    for(int j=0;j<3;j++) avgout[j]/=it;
+     //// Writing to file ////
     fprintf(outfile,"%f %f %f\n",avgout[0],avgout[1],avgout[2]);
     for(int i=0;i<k;i++)
     {
@@ -270,6 +276,7 @@ int main(int argc,char **argv){
     printf("\n");
     for(int j=0;j<3;j++) avgout[j]/=it;
     
+     //// Writing to file ////
     fprintf(outfile,"%f %f %f\n",avgout[0],avgout[1],avgout[2]);
     for(int i=0;i<k;i++)
     {
@@ -312,15 +319,17 @@ int main(int argc,char **argv){
         // printf("mcpus\n");
         // for(int i=0;i<num_points;i++) printf("%d ",mcpu[i]);
         // printf("\n");
+
         float c = 0;
         
         for(int i=0;i<num_points;i++) c+=mcpu[i];
-        // printf("%f \n", c/num_points);
+        
         time+=gt;
         it++;
+
         for(int j=0;j<3;j++) avgout[j]+=out[j];
         float ch = (float) out[1];
-        //  printf("%f\n",ch);
+
         if( ch/num_points < prob) break;
     }
     printf("GPU Time taken for ineq gpu Epoch 1: %.6f ms\n", time/it);
@@ -328,7 +337,8 @@ int main(int argc,char **argv){
     vector<pair<int,int>> v;
     for(int i=0;i<num_points;i++) v.push_back(make_pair(-mcpu[i],i));
     sort(v.begin(),v.end());
-    // printf("sorted smoothly\n");
+    
+    printf("Rearranging Points\n");
     int* inds = (int*)malloc(num_points*sizeof(int));
     int* gpuinds;
     cudaMalloc(&gpuinds,num_points*sizeof(int));
@@ -374,6 +384,7 @@ int main(int argc,char **argv){
     printf("\n");
     for(int j=0;j<3;j++) avgout[j]/=it;
     
+     //// Writing to file ////
     fprintf(outfile,"%f %f %f\n",avgout[0],avgout[1],avgout[2]);
     for(int i=0;i<k;i++)
     {

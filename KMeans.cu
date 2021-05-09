@@ -54,19 +54,17 @@ void centers_update_cpu(Point* means,Point* points,int* labels,int n,int k)
 }
 float kmeans_cpu(Point* points, Point* means,int* labels,float* dist, int iter, int n, int k,float* out){
     
-    
-        struct timeval t1, t2;
-
-     gettimeofday(&t1, 0);
+    struct timeval t1, t2;
+    gettimeofday(&t1, 0);
     dist_update(dist,points,means,n,k);
-    // printf("dist is fine\n");
     
     int ch = label_update_cpu(labels,dist,k,n);
-         gettimeofday(&t2, 0);
+
+    gettimeofday(&t2, 0);
     // printf("labels is fine\n");
     centers_update_cpu(means,points,labels,n,k);
 
-     float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
+    float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     out[0] = ct;
     out[1] = ch;
     return ct;
@@ -99,13 +97,10 @@ __global__ void label_update(int* labels,float* dist,int k,int n,int* ch)
             }
         }
         if(labels[id]!=l) {
-            // printf("bro!!!\n");
             atomicAdd(&(ch[0]),1);
         }
         labels[id] = l;
-        // if(labels[id] == l) { 
-        //         printf("bro!!!\n");
-        // }
+       
     }
 }
 __global__ void centers_update(Point* means,Point* points,int* labels,int n,int k)
@@ -130,16 +125,16 @@ __global__ void centers_update(Point* means,Point* points,int* labels,int n,int 
 float kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,float* dist,float* cpudist, int iter, int n, int k, float* out){
     // distances size n*k 
     // write kmeans gpu  
-        struct timeval t1, t2;
+    struct timeval t1, t2;
 
-    
-     // cpu dist
     Point cpumeans[k];
     cudaMemcpy(cpumeans,means,k*sizeof(Point),cudaMemcpyDeviceToHost);
 
-     gettimeofday(&t1, 0);
+    gettimeofday(&t1, 0);
+
     dist_update(cpudist,cpupoints,cpumeans,n,k);
-     gettimeofday(&t2, 0);
+     
+    gettimeofday(&t2, 0);
 
     cudaMemcpy(dist,cpudist,n*k*sizeof(float),cudaMemcpyHostToDevice);
     float a = n/1024 + 1;
@@ -149,15 +144,19 @@ float kmeans_gpu(Point* points, Point* cpupoints, Point* means,int* labels,float
     ch[0] = 0;
     int* gch; cudaMalloc(&gch,2*sizeof(int));
     cudaMemcpy(gch,ch,2*sizeof(int),cudaMemcpyHostToDevice);
-     gettimeofday(&t1, 0);
+
+    gettimeofday(&t1, 0);
+    
     label_update<<<a,1024>>>(labels,dist,k,n,gch);
     cudaDeviceSynchronize();
+    
     gettimeofday(&t2, 0);
+
     centers_update<<<1,k>>>(means,points,labels,n,k);
     cudaDeviceSynchronize();
-    // gettimeofday(&t2, 0);
+
     ct += (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
-    /// change ch[0];
+
     out[0] = ct;
     cudaMemcpy(ch,gch,2*sizeof(int),cudaMemcpyDeviceToHost);
     out[1] = ch[0];
@@ -241,7 +240,6 @@ __global__ void label_update_ineq_gpu(Point* points,int* labels,Point* means,flo
 {
      int t =  ceil( (float)n/ (gridDim.x * blockDim.x) );
      int s =  blockIdx.x * (n/gridDim.x) + threadIdx.x * t;
-    //  printf("%d %d\n",s,s+t);
      for(int i = s;i< s+t ;i++)
      {
          if( i < n) {
@@ -272,7 +270,6 @@ __global__ void label_update_ineq_gpu(Point* points,int* labels,Point* means,flo
                 }
             }
             if(labels[i] != new_cent) { 
-                // printf("bro!!!\n");
                 atomicAdd(&(ch[0]),1);
             }
             labels[i] = new_cent;
@@ -297,8 +294,10 @@ float kmeans_gpu_ineq(Point* points, Point* means, int* labels, float* icd, int*
     cudaMalloc(&gpumeans,k*sizeof(Point));
 
     gettimeofday(&t1, 0);
+
     icd_update(means,icd,k);
     rid_update(icd,rid,k);
+    
     gettimeofday(&t2, 0);
     float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     out[2] = ct;
@@ -311,9 +310,12 @@ float kmeans_gpu_ineq(Point* points, Point* means, int* labels, float* icd, int*
     int* gch; cudaMalloc(&gch,2*sizeof(int));
     cudaMemcpy(gch,ch,2*sizeof(int),cudaMemcpyHostToDevice);
     gettimeofday(&t1, 0);
+    
     label_update_ineq_gpu<<<gridSize,blockSize>>>(points,labels,gpumeans,gpuicd, gpurid,n,k,gch,m);
     cudaDeviceSynchronize();
+    
     gettimeofday(&t2, 0);
+    
     ct += (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     centers_update<<<1,k>>>(gpumeans,points,labels,n,k);   
     cudaDeviceSynchronize();
@@ -328,7 +330,6 @@ __global__ void label_update_ineq_gpu_eff(Point* points,int* inds,int* labels,Po
 {
      int t =  ceil( (float)n/ (gridDim.x * blockDim.x) );
      int s =  blockIdx.x * (n/gridDim.x) + threadIdx.x * t;
-    //  printf("%d %d\n",s,s+t);
      for(int m = s; m< s+t ;m++)
      {
          if( m < n) {
@@ -355,7 +356,6 @@ __global__ void label_update_ineq_gpu_eff(Point* points,int* inds,int* labels,Po
                 }
             }
             if(labels[inds[m]] != new_cent) { 
-                // printf("bro!!!\n");
                 atomicAdd(&(ch[0]),1);
             }
             labels[inds[m]] = new_cent;
@@ -399,25 +399,29 @@ float kmeans_gpu_ineq_eff(Point* points,int* inds, Point* means, int* labels, fl
     cudaMalloc(&gpumeans,k*sizeof(Point));
 
     gettimeofday(&t1, 0);
+
     icd_update(means,icd,k);
     rid_update(icd,rid,k);
-    gettimeofday(&t2, 0);
-    float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     
+    gettimeofday(&t2, 0);
+    
+    float ct = (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
     out[2] = ct;
     cudaMemcpy(gpumeans,means,k*sizeof(Point),cudaMemcpyHostToDevice);
     cudaMemcpy(gpuicd,icd,k*k*sizeof(float),cudaMemcpyHostToDevice);
     cudaMemcpy(gpurid,rid,k*k*sizeof(int),cudaMemcpyHostToDevice);
-    
     int ch[2];
     ch[0] = 0;
     int* gch; cudaMalloc(&gch,2*sizeof(int));
     
     cudaMemcpy(gch,ch,2*sizeof(int),cudaMemcpyHostToDevice);
     gettimeofday(&t1, 0);
+    
     label_update_ineq_gpu_eff<<<gridSize,blockSize>>>(points,inds,labels,gpumeans,gpuicd, gpurid,n,k,gch);
     cudaDeviceSynchronize();
+    
     gettimeofday(&t2, 0);
+    
     ct += (1000000.0*(t2.tv_sec-t1.tv_sec) + t2.tv_usec-t1.tv_usec)/1000.0;
 
     centers_update_eff<<<1,k>>>(gpumeans,inds,points,labels,n,k);   
